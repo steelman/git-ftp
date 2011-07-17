@@ -20,6 +20,9 @@
 # Setup Environment
 # ------------------------------------------------------------
 
+readonly STARTDIR=$(pwd)
+cd $(git rev-parse --show-toplevel) || print_error_and_die "Not a Git project? Exiting..." 8
+
 # General config
 readonly DEFAULT_PROTOCOL="ftp"
 readonly DEPLOYED_SHA1_FILE=".git-ftp.log"
@@ -33,6 +36,7 @@ readonly VERSION='0.5.2'
 # ------------------------------------------------------------
 URL=""
 REMOTE_PROTOCOL=""
+REMOTE_CACERT=""
 REMOTE_HOST=""
 REMOTE_USER=""
 REMOTE_PASSWD=""
@@ -46,6 +50,7 @@ KEYCHAIN_USER=""
 KEYCHAIN_HOST=""
 DEPLOYED_SHA1=""
 declare -a CURL_ARGS
+declare -i CURL_INSECURE=0
 declare -i VERBOSE=0
 declare -i IGNORE_DEPLOYED=0
 declare -i DRY_RUN=0
@@ -380,6 +385,8 @@ release_lock() {
 set_remote_host() {
 	[ -z $URL ] && [ -n "$SCOPE" ] && URL="$(git config --get git-ftp.$SCOPE.url)"
 	[ -z $URL ] && URL="$(git config --get git-ftp.url)"
+	[ -z $REMOTE_CACERT ] && [ -n "$SCOPE" ] && REMOTE_CACERT="$(git config --get git-ftp.$SCOPE.cacert)"
+	[ -z $REMOTE_CACERT ] && REMOTE_CACERT="$(git config --get git-ftp.cacert)"
 	REMOTE_HOST=$(expr "$URL" : ".*://\([[:alpha:]0-9\.:-]*\).*")
 	[ -z $REMOTE_HOST ] && REMOTE_HOST=$(expr "$URL" : "\([[:alpha:]0-9\.:-]*\).*")
 	[ -z $REMOTE_HOST ] && print_error_and_die "Remote host not set" $ERROR_MISSING_ARGUMENTS
@@ -542,8 +549,13 @@ handle_submodule_sync() {
 handle_remote_protocol_options() {
 	# SFTP uses a different remove command and uses absolute paths
 	[ "$REMOTE_PROTOCOL" = "sftp" ] && REMOTE_DELETE_CMD="rm /"
+	[ "$REMOTE_PROTOCOL" = "ftpes" -o "$REMOTE_PROTOCOL" = "ftps" ] && \
+	    [ -n "$REMOTE_CACERT" -a -r "$REMOTE_CACERT" ] && \
+	    REMOTE_CMD_OPTIONS="$REMOTE_CMD_OPTIONS --cacert $REMOTE_CACERT"
 	# Options for curl if using FTPES
-	[ "$REMOTE_PROTOCOL" = "ftpes" ] && REMOTE_PROTOCOL="ftp" && REMOTE_CMD_OPTIONS="$REMOTE_CMD_OPTIONS --ssl -k"
+	[ "$REMOTE_PROTOCOL" = "ftpes" ] && REMOTE_PROTOCOL="ftp" && REMOTE_CMD_OPTIONS="$REMOTE_CMD_OPTIONS --ssl"
+	# Require users' explicit consent for insecure connections
+	[ $CURL_INSECURE = 1 ] && REMOTE_CMD_OPTIONS="$REMOTE_CMD_OPTIONS -k"
 }
 
 handle_action() {
@@ -838,6 +850,31 @@ do
 			VERBOSE=1
 			[ -n "$LOG_CACHE" ] && echo -e $LOG_CACHE
 			REMOTE_CMD_OPTIONS="-v"
+			;;
+		--insecure)
+			CURL_INSECURE=1
+			write_log "Insecure SSL/TLS connection allowed"
+			;;
+		--cacert*)
+			case "$#,$1" in
+				*,*=*)
+					REMOTE_CACERT=$(expr "z$1" : 'z-[^=]*=\(.*\)')
+					;;
+				1,*)
+					print error_and_die "Too few arguments for option --cacert" $ERROR_MISSING_ARGUMENTS
+					;;
+				*)
+					if [ ! $(echo "$2" | egrep '^-' | wc -l) -eq 1 ]; then
+						REMOTE_CACERT="$2"
+						shift
+					else
+						print_error_and_die "Too few arguments for option --cacert" $ERROR_MISSING_ARGUMENTS
+					fi
+					;;
+			esac
+			if  [ ! $(echo "$REMOTE_CACERT" | egrep '^/' | wc -l) -eq 1 ]; then
+				REMOTE_CACERT="$STARTDIR/$REMOTE_CACERT"
+			fi
 			;;
 		-f|--force)
 			FORCE=1
