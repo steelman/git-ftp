@@ -131,6 +131,7 @@ OPTIONS
 	-f, --force		Force, does not ask questions
 	-n, --silent      	Silent
 	-v, --verbose		Verbose
+	--cacert <file>         Use <file> as certificate for server authentication
 	--version		Prints version
 
 
