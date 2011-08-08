@@ -89,6 +89,10 @@ Another advantage is Git-ftp only handles files which are tracked with [Git].
 :	Don't verify server certificate. BE CAREFUL!
 `--cacert <file>`
 :	Use **FILE** as CA certificate store. Usefull when a server has got a self-signed certificate. The **FILE** is relative to the directory the command is invoked in. When a relative pathname is set in the git-ftp.cacert option (git-ftp.SCOPE.cacert is also available), it's relative to the top of the git repository.
+`--uncommited`
+:	Push to a server files that are tracked and have been modified but not yet commited, both staged and not.
+`--unstaged`
+:	Push to a server files that are tracked and have been modified but not yet added to the index.
 
 # URL
 
